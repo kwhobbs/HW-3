@@ -1,6 +1,6 @@
 ---
 title: "MATH 216 Homework 3"
-author: "WRITE YOUR NAME HERE"
+author: "Katherine Hobbs"
 output:
   html_document:
     toc: true
@@ -15,6 +15,9 @@ library(dplyr)
 library(readr)
 library(lubridate)
 library(Quandl)
+library(tidyr)
+library(knitr)
+library(forcats)
 ```
 
 
@@ -23,13 +26,13 @@ library(Quandl)
 
 Please indicate
 
-* Who you collaborated with:
-* Roughly how much time you spent on this HW so far:
-* The URL of the RPubs published URL [here](https://www.nhl.com/).
-* What gave you the most trouble:
+* Who you collaborated with: Amanda Hotvedt, Kyra Gray
+* Roughly how much time you spent on this HW so far: 5
+* The URL of the RPubs published URL [here](http://rpubs.com/khobbs/223599).
+* What gave you the most trouble: I had trouble understanding the work flow and specific code required for the regressions, but I think I have a better grasp on in now. 
 * Any comments you have:
 
-
+I still need to figure out how to make the testing and training data sets disjoint and whether I need to set a seed for those models (I have noticed that I get a different proportion for correct predictions each time I run the model). 
 
 
 ## Question 1:
@@ -82,6 +85,74 @@ to rate how well we performed.
 ```{r, echo=TRUE, message=TRUE, warning=TRUE, fig.width=8, fig.height=4.5}
 set.seed(76)
 
+profiles <- profiles %>% 
+    mutate(religion= ifelse(is.na(religion), "Not Reported", religion))
+
+profiles <- profiles %>% 
+  mutate(`Grouped Religion` = fct_recode(religion,
+                  "agnosticism" = "agnosticism",
+                  "agnosticism" = "agnosticism and laughing about it",
+                  "agnosticism" = "agnosticism and somewhat serious about it",
+                  "agnosticism" = "agnosticism and very serious about it",
+                  "agnosticism" = "agnosticism but not too serious about it",
+                  "atheism" = "atheism",
+                  "atheism" = "atheism and laughing about it",
+                  "atheism" = "atheism and somewhat serious about it",
+                  "atheism" = "atheism and very serious about it",
+                  "atheism" = "atheism but not too serious about it",
+                  "buddhism" = "buddhism",
+                  "buddhism" = "buddhism and laughing about it",
+                  "buddhism" = "buddhism and somewhat serious about it",
+                  "buddhism" = "buddhism and very serious about it",
+                  "buddhism" = "buddhism but not too serious about it",
+                  "catholism" = "catholicism",
+                  "catholism" = "catholicism and laughing about it",
+                  "catholism" = "catholicism and somewhat serious about it",
+                  "catholism" = "catholicism and very serious about it",
+                  "catholism" = "catholicism but not too serious about it",
+                  "christianity" = "christianity",
+                  "christianity" = "christianity and laughing about it",
+                  "christianity" ="christianity and somewhat serious about it",
+                  "christianity" = "christianity and very serious about it",
+                  "christianity" = "christianity but not too serious about it",
+                  "hinduism" = "hinduism",
+                  "hinduism" = "hinduism and laughing about it",
+                  "hinduism" = "hinduism and somewhat serious about it",
+                  "hinduism" = "hinduism and very serious about it",
+                  "hinduism" = "hinduism but not too serious about it",
+                  "islam" = "islam",
+                  "islam" = "islam and laughing about it",
+                  "islam" = "islam and somewhat serious about it",
+                  "islam" = "islam and very serious about it",
+                  "islam" = "islam but not too serious about it",
+                  "judaism" = "judaism",
+                  "judaism" = "judaism and laughing about it",
+                  "judaism" = "judaism and somewhat serious about it",
+                  "judaism" = "judaism and very serious about it",
+                  "judaism" = "judaism but not too serious about it",
+                  "other" = "other",
+                  "other" = "other and laughing about it",
+                  "other" = "other and somewhat serious about it",
+                  "other" = "other and very serious about it",
+                  "other" = "other but not too serious about it",
+                  "Not Reported" = "Not Reported"))
+
+
+profiles <- profiles %>% 
+  mutate(income_levels =
+    ifelse(income %in% -2:0, "Not Reported",
+    ifelse(income %in% 0:20000, "Low Income",
+    ifelse(income %in% 20001:70000, "Middle Income",
+    ifelse(income %in% 70000:1000000, "High Income", " ")))))
+  
+profiles <- profiles %>%
+  mutate(job =ifelse(is.na(job),"Not Reported", job))
+
+training <- profiles[sample(nrow(profiles), 2997), ]
+
+test <- profiles[sample(nrow(profiles), 56946), ]
+
+#I do not yet know how to make these disjoint data sets! 
 ```
 
 
@@ -94,6 +165,21 @@ regression model to the `training` data. Assign this model to an R object called
 
 ```{r, echo=TRUE, message=TRUE, warning=TRUE, fig.width=8, fig.height=4.5}
 
+predict_sex_model <- glm(is_female ~`Grouped Religion` + income_levels + job, data = training, family = "binomial")
+
+broom::tidy(predict_sex_model)
+
+predictions <- training %>% 
+  select(income_levels, job, `Grouped Religion`, is_female) %>% 
+  mutate(p_hat = fitted(predict_sex_model))
+
+predictions <- predictions %>% 
+  mutate(correct = ifelse(p_hat >.5 & is_female==1, 1,
+                          ifelse(p_hat<0.5 &is_female==0,1,0)))
+                          
+predictions %>% 
+  summarise(prop_correct=mean(correct)) %>% 
+  knitr::kable(digits = 3)
 ```
 
 
@@ -108,6 +194,22 @@ type="response")` does? The help file is located in `?predict.glm`
 
 ```{r, echo=TRUE, message=TRUE, warning=TRUE, fig.width=8, fig.height=4.5}
 
+p_hat <- predict(predict_sex_model, data=training, type="response")
+ggplot(data=NULL, aes(x=p_hat)) + 
+  geom_histogram()
+
+test <- test %>% 
+  mutate(p_hat = predict(predict_sex_model, newdata=test, type="response"))
+
+test_predictions <- test %>% 
+  mutate(correct = ifelse(p_hat >.5 & is_female==1, 1,
+                          ifelse(p_hat<0.5 &is_female==0,1,0)))
+                          
+test_predictions  %>% 
+  summarise(Prop_correct=mean(correct)) %>% 
+  knitr::kable(digits = 3)
+
+
 ```
 
 
@@ -117,7 +219,7 @@ type="response")` does? The help file is located in `?predict.glm`
 Did the model perform better on the `training` data or the `test` data? Why
 do you think that is?
 
-
+The model performed better on the test data, but only marginally! 63.4% of predictions were correct for the test data, while 63.3% were correct for the training data. 
 
 
 
@@ -135,6 +237,30 @@ Let the reference currency be US dollars. Analyze these results and provide
 insight to a foreign currency exchanger.
 
 ```{r, echo=TRUE, message=TRUE, warning=TRUE, fig.width=8, fig.height=4.5}
+
+bitcoin <- Quandl("BAVERAGE/USD") %>% 
+  tbl_df()
+
+gold <- Quandl("BUNDESBANK/BBK01_WT5511") %>% 
+  tbl_df()
+
+bitcoin <- bitcoin %>% 
+  rename(
+    Avg = `24h Average`,
+    Total_Volume = `Total Volume`)
+
+gold_recent <- gold %>% 
+  filter(Date %within% interval(ymd("2010-01-01"), ymd("2016-12-31")))
+
+p <- ggplot() +
+  geom_line(data=bitcoin, aes(x=Date, y=Avg, color="Bitcoin")) +
+  geom_line(data=gold_recent, aes(x=Date, y=Value, color="Gold")) +
+  labs(x='Date', y='USD') +
+  labs(title="Value of Bitcoin and Gold 2010-2016")
+
+p
+
+#I still need to figure out how to make a variable for daily change in price. I know how I would do this in excel by taking the difference between one cell and the cell before it, but need to figure out the command in R. 
 
 ```
 
@@ -177,6 +303,27 @@ the "graveyard shift" during the academic year? Define
 * the academic year as September through May (inclusive)
 
 ```{r, echo=TRUE, message=TRUE, warning=TRUE, fig.width=8, fig.height=4.5}
+
+jukebox <- jukebox %>% 
+  mutate(Date = parse_date_time(date_time, "a b d HMS Y")) %>% 
+  mutate(Month=month(Date)) %>% 
+  mutate(hour=hour(Date))
+
+graveyard <- jukebox %>%   
+  filter(Month<=5 | Month>=9) %>% 
+  filter(hour>=24 | hour <=8)
+  
+graveyard_artist <- graveyard %>% 
+  group_by(artist) %>% 
+  tally() %>% 
+  ungroup() %>% 
+  arrange(desc(n))
+
+graveyard_top10 <- graveyard_artist %>% 
+  filter(n>1222) 
+
+graveyard_top10 %>% 
+  kable()
 
 ```
 
