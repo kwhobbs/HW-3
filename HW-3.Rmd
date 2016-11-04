@@ -150,7 +150,7 @@ profiles <- profiles %>%
 
 training <- profiles[sample(nrow(profiles), 2997), ]
 
-test <- profiles[sample(nrow(profiles), 56946), ]
+test <- anti_join(profiles, training, by="id")
 
 #I do not yet know how to make these disjoint data sets! 
 ```
@@ -178,8 +178,8 @@ predictions <- predictions %>%
                           ifelse(p_hat<0.5 &is_female==0,1,0)))
                           
 predictions %>% 
-  summarise(prop_correct=mean(correct)) %>% 
-  knitr::kable(digits = 3)
+  summarise(Training_prop_correct=mean(correct)) %>% 
+  knitr::kable(digits = 4)
 ```
 
 
@@ -194,20 +194,17 @@ type="response")` does? The help file is located in `?predict.glm`
 
 ```{r, echo=TRUE, message=TRUE, warning=TRUE, fig.width=8, fig.height=4.5}
 
-p_hat <- predict(predict_sex_model, data=training, type="response")
-ggplot(data=NULL, aes(x=p_hat)) + 
-  geom_histogram()
-
-test <- test %>% 
+test_predictions <- test %>% 
+  select(income_levels, job, `Grouped Religion`, is_female) %>% 
   mutate(p_hat = predict(predict_sex_model, newdata=test, type="response"))
 
-test_predictions <- test %>% 
+test_predictions <- test_predictions %>% 
   mutate(correct = ifelse(p_hat >.5 & is_female==1, 1,
                           ifelse(p_hat<0.5 &is_female==0,1,0)))
                           
 test_predictions  %>% 
-  summarise(Prop_correct=mean(correct)) %>% 
-  knitr::kable(digits = 3)
+  summarise(Test_Prop_correct=mean(correct)) %>% 
+  knitr::kable(digits = 4)
 
 
 ```
@@ -219,10 +216,7 @@ test_predictions  %>%
 Did the model perform better on the `training` data or the `test` data? Why
 do you think that is?
 
-The model performed better on the test data, but only marginally! 63.4% of predictions were correct for the test data, while 63.3% were correct for the training data. 
-
-
-
+The model performed better on the test data, but only marginally! The results were almost the same. 63.73% of predictions were correct for the training data while 63.67% of predictions were correct for the testing data. I would expect the model to perform better on the training data because that was the data used to build the model, while the test data is a new dataset to which the model is being applied. 
 
 
 ## Question 2:
@@ -249,18 +243,26 @@ bitcoin <- bitcoin %>%
     Avg = `24h Average`,
     Total_Volume = `Total Volume`)
 
+bitcoin <- bitcoin %>% 
+  mutate(Price_lag=lag(Avg)) %>% 
+  mutate(Daily_Price_Change=(Avg - Price_lag)) %>% 
+  mutate(Daily_Rel_Price_Change=(Daily_Price_Change/Price_lag))          
+
 gold_recent <- gold %>% 
   filter(Date %within% interval(ymd("2010-01-01"), ymd("2016-12-31")))
 
+gold_recent <- gold_recent %>% 
+    mutate(Value_lag=lag(Value)) %>% 
+    mutate(Daily_Value_Change=(Value - Value_lag)) %>% 
+    mutate(Daily_Rel_Value_Change=(Daily_Value_Change/Value_lag))     
+
 p <- ggplot() +
-  geom_line(data=bitcoin, aes(x=Date, y=Avg, color="Bitcoin")) +
-  geom_line(data=gold_recent, aes(x=Date, y=Value, color="Gold")) +
+  geom_line(data=bitcoin, aes(x=Date, y=Daily_Rel_Price_Change, color="Bitcoin")) +
+  geom_line(data=gold_recent, aes(x=Date, y=Daily_Rel_Value_Change, color="Gold")) +
   labs(x='Date', y='USD') +
-  labs(title="Value of Bitcoin and Gold 2010-2016")
+  labs(title="Daily Relative Change of Bitcoin and Gold Values 2010-2016")
 
 p
-
-#I still need to figure out how to make a variable for daily change in price. I know how I would do this in excel by taking the difference between one cell and the cell before it, but need to figure out the command in R. 
 
 ```
 
@@ -320,7 +322,7 @@ graveyard_artist <- graveyard %>%
   arrange(desc(n))
 
 graveyard_top10 <- graveyard_artist %>% 
-  filter(n>1222) 
+  top_n(10)
 
 graveyard_top10 %>% 
   kable()
